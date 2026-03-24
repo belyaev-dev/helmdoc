@@ -1,0 +1,5 @@
+.gsd/
+.bg-shell/
+dist/
+helmdoc
+*.exe
