@@ -1,0 +1,41 @@
+controller:
+  replicaCount: 2
+  image:
+    repository: registry.k8s.io/ingress-nginx/controller
+    tag: "1.11.1"
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 80
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 101
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  tolerations:
+    - key: workload
+      operator: Exists
+  extraArgs:
+    - --enable-ssl-passthrough
+persistence:
+  enabled: true
+  storageClass: gp3
+  accessModes:
+    - ReadWriteOnce
+  size: 8Gi
+serviceAccount:
+  create: true
+  name: ""

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ default (printf "%s-graceful" .Chart.Name) (required "optionalName is required when not linting" .Values.optionalName) }}
+  namespace: {{ .Release.Namespace }}
+data:
+  lookupResult: {{ ternary "present" "absent" (not (empty (lookup "v1" "ConfigMap" .Release.Namespace "offline-config"))) | quote }}
+  requiredResult: {{ default "lint-mode-fallback" (required "missingOptional is required when not linting" .Values.missingOptional) | quote }}

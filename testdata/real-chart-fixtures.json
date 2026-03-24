@@ -1,0 +1,452 @@
+{
+  "fixtures": [
+    {
+      "id": "nginx-ingress",
+      "path": "testdata/nginx-ingress",
+      "source_url": "https://github.com/kubernetes/ingress-nginx/tree/helm-chart-4.15.1/charts/ingress-nginx",
+      "chart_name": "ingress-nginx",
+      "chart_version": "4.15.1",
+      "expected": {
+        "overall_grade": "B",
+        "overall_score": 84.5,
+        "total_findings": 13,
+        "category_summaries": [
+          {
+            "category": "security",
+            "score": 85.0,
+            "grade": "B",
+            "findings": 1
+          },
+          {
+            "category": "resources",
+            "score": 60.0,
+            "grade": "D",
+            "findings": 5
+          },
+          {
+            "category": "storage",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "health",
+            "score": 68.0,
+            "grade": "D",
+            "findings": 4
+          },
+          {
+            "category": "availability",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "network",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "images",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "ingress",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "scaling",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "config",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          }
+        ],
+        "finding_tuples": [
+          {
+            "rule_id": "SEC003",
+            "category": "security",
+            "severity": "error",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller"
+          },
+          {
+            "rule_id": "RES001",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-createSecret.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-create"
+          },
+          {
+            "rule_id": "RES001",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-patchWebhook.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-patch"
+          },
+          {
+            "rule_id": "RES001",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller"
+          },
+          {
+            "rule_id": "RES002",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-createSecret.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-create"
+          },
+          {
+            "rule_id": "RES002",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-patchWebhook.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-patch"
+          },
+          {
+            "rule_id": "HLT001",
+            "category": "health",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-createSecret.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-create"
+          },
+          {
+            "rule_id": "HLT001",
+            "category": "health",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-patchWebhook.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-patch"
+          },
+          {
+            "rule_id": "HLT002",
+            "category": "health",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-createSecret.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-create"
+          },
+          {
+            "rule_id": "HLT002",
+            "category": "health",
+            "severity": "warning",
+            "path": "templates/admission-webhooks/job-patch/job-patchWebhook.yaml",
+            "resource": "Job/helmdoc-ingress-nginx-admission-patch"
+          },
+          {
+            "rule_id": "AVL001",
+            "category": "availability",
+            "severity": "warning",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller"
+          },
+          {
+            "rule_id": "NET001",
+            "category": "network",
+            "severity": "warning",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller"
+          },
+          {
+            "rule_id": "SCL001",
+            "category": "scaling",
+            "severity": "warning",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller"
+          }
+        ],
+        "anchor_findings": [
+          {
+            "rule_id": "SEC003",
+            "category": "security",
+            "severity": "error",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller",
+            "title": "Container root filesystem is writable",
+            "description": "container \"controller\" in Deployment/helmdoc-ingress-nginx-controller does not set readOnlyRootFilesystem: true.",
+            "remediation": "Set container \"controller\" securityContext.readOnlyRootFilesystem to true."
+          },
+          {
+            "rule_id": "NET001",
+            "category": "network",
+            "severity": "warning",
+            "path": "templates/controller-deployment.yaml",
+            "resource": "Deployment/helmdoc-ingress-nginx-controller",
+            "title": "Workload namespace has no NetworkPolicy",
+            "description": "Deployment/helmdoc-ingress-nginx-controller is rendered in namespace \"default\", but no NetworkPolicy is rendered for that namespace.",
+            "remediation": "Enable a chart networkPolicy setting in values.yaml so namespace \"default\" renders at least one NetworkPolicy for Deployment/helmdoc-ingress-nginx-controller."
+          }
+        ]
+      }
+    },
+    {
+      "id": "postgresql",
+      "path": "testdata/postgresql.tgz",
+      "source_url": "oci://registry-1.docker.io/bitnamicharts/postgresql:16.4.5",
+      "chart_name": "postgresql",
+      "chart_version": "16.4.5",
+      "expected": {
+        "overall_grade": "A",
+        "overall_score": 98.9,
+        "total_findings": 2,
+        "category_summaries": [
+          {
+            "category": "security",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "resources",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "storage",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "health",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "availability",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "network",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "images",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "ingress",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "scaling",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "config",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          }
+        ],
+        "finding_tuples": [
+          {
+            "rule_id": "IMG002",
+            "category": "images",
+            "severity": "warning",
+            "path": "templates/primary/statefulset.yaml",
+            "resource": "StatefulSet/helmdoc-postgresql"
+          },
+          {
+            "rule_id": "SCL001",
+            "category": "scaling",
+            "severity": "warning",
+            "path": "templates/primary/statefulset.yaml",
+            "resource": "StatefulSet/helmdoc-postgresql"
+          }
+        ],
+        "anchor_findings": [
+          {
+            "rule_id": "IMG002",
+            "category": "images",
+            "severity": "warning",
+            "path": "templates/primary/statefulset.yaml",
+            "resource": "StatefulSet/helmdoc-postgresql",
+            "title": "Container image is not pinned by digest",
+            "description": "container \"postgresql\" in StatefulSet/helmdoc-postgresql uses image \"docker.io/bitnami/postgresql:17.2.0-debian-12-r8\" without a pinned digest.",
+            "remediation": "Pin container \"postgresql\" to an immutable digest (for example @sha256:...) in the template or values.yaml."
+          },
+          {
+            "rule_id": "SCL001",
+            "category": "scaling",
+            "severity": "warning",
+            "path": "templates/primary/statefulset.yaml",
+            "resource": "StatefulSet/helmdoc-postgresql",
+            "title": "Workload has no matching HorizontalPodAutoscaler",
+            "description": "StatefulSet/helmdoc-postgresql has no matching HorizontalPodAutoscaler in namespace \"default\".",
+            "remediation": "Render a HorizontalPodAutoscaler with scaleTargetRef matching StatefulSet/helmdoc-postgresql in namespace \"default\"."
+          }
+        ]
+      }
+    },
+    {
+      "id": "grafana",
+      "path": "testdata/grafana.tgz",
+      "source_url": "https://github.com/grafana/helm-charts/releases/download/grafana-10.5.15/grafana-10.5.15.tgz",
+      "chart_name": "grafana",
+      "chart_version": "10.5.15",
+      "expected": {
+        "overall_grade": "A",
+        "overall_score": 92.2,
+        "total_findings": 7,
+        "category_summaries": [
+          {
+            "category": "security",
+            "score": 85.0,
+            "grade": "B",
+            "findings": 1
+          },
+          {
+            "category": "resources",
+            "score": 84.0,
+            "grade": "B",
+            "findings": 2
+          },
+          {
+            "category": "storage",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "health",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "availability",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "network",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "images",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "ingress",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          },
+          {
+            "category": "scaling",
+            "score": 92.0,
+            "grade": "A",
+            "findings": 1
+          },
+          {
+            "category": "config",
+            "score": 100.0,
+            "grade": "A",
+            "findings": 0
+          }
+        ],
+        "finding_tuples": [
+          {
+            "rule_id": "SEC003",
+            "category": "security",
+            "severity": "error",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "RES001",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "RES002",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "AVL001",
+            "category": "availability",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "NET001",
+            "category": "network",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "IMG002",
+            "category": "images",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          },
+          {
+            "rule_id": "SCL001",
+            "category": "scaling",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana"
+          }
+        ],
+        "anchor_findings": [
+          {
+            "rule_id": "SEC003",
+            "category": "security",
+            "severity": "error",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana",
+            "title": "Container root filesystem is writable",
+            "description": "container \"grafana\" in Deployment/helmdoc-grafana does not set readOnlyRootFilesystem: true.",
+            "remediation": "Set container \"grafana\" securityContext.readOnlyRootFilesystem to true."
+          },
+          {
+            "rule_id": "RES002",
+            "category": "resources",
+            "severity": "warning",
+            "path": "templates/deployment.yaml",
+            "resource": "Deployment/helmdoc-grafana",
+            "title": "Container resource requests are missing",
+            "description": "container \"grafana\" in Deployment/helmdoc-grafana does not define resource requests.",
+            "remediation": "Add resources.requests directly to container \"grafana\" in the template, or expose a values.yaml path for it."
+          }
+        ]
+      }
+    }
+  ]
+}

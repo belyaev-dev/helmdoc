@@ -14,12 +14,12 @@ import (
 func LoadChart(path string) (*chart.Chart, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("resolving chart path: %w", err)
+		return nil, fmt.Errorf("resolving chart path %q: %w", path, err)
 	}
 
 	info, err := os.Stat(abs)
 	if err != nil {
-		return nil, fmt.Errorf("chart path not found: %w", err)
+		return nil, fmt.Errorf("stat chart path %q (%s): %w", path, abs, err)
 	}
 
 	var c *chart.Chart
@@ -29,7 +29,7 @@ func LoadChart(path string) (*chart.Chart, error) {
 		c, err = loader.LoadFile(abs)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("loading chart: %w", err)
+		return nil, fmt.Errorf("loading chart %q (%s): %w", path, abs, err)
 	}
 
 	return c, nil
