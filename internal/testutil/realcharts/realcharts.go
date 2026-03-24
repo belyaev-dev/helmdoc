@@ -10,6 +10,8 @@ import (
 	"github.com/belyaev-dev/helmdoc/internal/rules"
 	_ "github.com/belyaev-dev/helmdoc/internal/rules/all"
 	"github.com/belyaev-dev/helmdoc/pkg/models"
+	helmchart "helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chartutil"
 )
 
 type Manifest struct {
@@ -90,7 +92,7 @@ func FixtureByID(t testing.TB, id string) Fixture {
 	return Fixture{}
 }
 
-func AnalysisContext(t testing.TB, fixture Fixture) rules.AnalysisContext {
+func LoadChart(t testing.TB, fixture Fixture) *helmchart.Chart {
 	t.Helper()
 
 	chartPath := FixturePath(t, fixture)
@@ -99,9 +101,16 @@ func AnalysisContext(t testing.TB, fixture Fixture) rules.AnalysisContext {
 		t.Fatalf("LoadChart(%q) error = %v", chartPath, err)
 	}
 
+	return loadedChart
+}
+
+func AnalysisContext(t testing.TB, fixture Fixture) rules.AnalysisContext {
+	t.Helper()
+
+	loadedChart := LoadChart(t, fixture)
 	rendered, err := chartanalysis.RenderChart(loadedChart)
 	if err != nil {
-		t.Fatalf("RenderChart(%q) error = %v", chartPath, err)
+		t.Fatalf("RenderChart(%q) error = %v", FixturePath(t, fixture), err)
 	}
 
 	return rules.AnalysisContext{
@@ -116,6 +125,65 @@ func RunRules(t testing.TB, fixture Fixture) []models.Finding {
 
 	ctx := AnalysisContext(t, fixture)
 	return rules.RunAll(ctx)
+}
+
+func RenderChartWithValues(t testing.TB, fixture Fixture, overrideValues map[string]any) (*helmchart.Chart, map[string][]models.K8sResource) {
+	t.Helper()
+
+	loadedChart := LoadChart(t, fixture)
+	loadedChart.Values = MergeChartValues(loadedChart.Values, overrideValues)
+
+	rendered, err := chartanalysis.RenderChart(loadedChart)
+	if err != nil {
+		t.Fatalf("RenderChart(%q) with overrides error = %v", FixturePath(t, fixture), err)
+	}
+
+	return loadedChart, rendered
+}
+
+func MergeChartValues(baseValues, overrideValues map[string]any) map[string]any {
+	mergedOverrides := cloneMap(overrideValues)
+	if mergedOverrides == nil {
+		mergedOverrides = map[string]any{}
+	}
+
+	return chartutil.CoalesceTables(mergedOverrides, cloneMap(baseValues))
+}
+
+func FindRenderedResource(rendered map[string][]models.K8sResource, templatePath, kind, name string) (models.K8sResource, bool) {
+	for _, resource := range rendered[templatePath] {
+		if resource.Kind != kind {
+			continue
+		}
+		if resource.Name != name {
+			continue
+		}
+		return resource, true
+	}
+
+	return models.K8sResource{}, false
+}
+
+func FindWorkloadContainer(rendered map[string][]models.K8sResource, templatePath, kind, name, containerName string) (rules.WorkloadContainer, bool) {
+	var matched rules.WorkloadContainer
+	found := false
+
+	rules.IterateWorkloadContainers(rendered, func(container rules.WorkloadContainer) bool {
+		if container.TemplatePath != templatePath {
+			return true
+		}
+		if container.Resource.Kind != kind || container.Resource.Name != name {
+			return true
+		}
+		if container.Name != containerName {
+			return true
+		}
+		matched = container
+		found = true
+		return false
+	})
+
+	return matched, found
 }
 
 func RepoPath(t testing.TB, rel string) string {
@@ -142,4 +210,31 @@ func findRepoRoot(t testing.TB) string {
 
 	t.Fatal("unable to locate repo root from test working directory")
 	return ""
+}
+
+func cloneMap(in map[string]any) map[string]any {
+	if in == nil {
+		return nil
+	}
+
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = cloneValue(value)
+	}
+	return out
+}
+
+func cloneValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneMap(typed)
+	case []any:
+		cloned := make([]any, len(typed))
+		for i, nested := range typed {
+			cloned[i] = cloneValue(nested)
+		}
+		return cloned
+	default:
+		return typed
+	}
 }
