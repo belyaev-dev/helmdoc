@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var scanCmd = newScanCommand()
-
 func newScanCommand() *cobra.Command {
 	var outputFormat string
 	var minScore string
