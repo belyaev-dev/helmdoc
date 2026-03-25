@@ -4,7 +4,7 @@ dist/
 tmp/
 .tmp_inspect/
 .env
-helmdoc
+/helmdoc
 *.exe
 
 # ── GSD baseline (auto-generated) ──
