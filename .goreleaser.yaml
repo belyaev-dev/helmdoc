@@ -1,0 +1,79 @@
+version: 2
+
+project_name: helmdoc
+
+builds:
+  - id: helmdoc
+    main: .
+    binary: helmdoc
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.version={{ .Version }}
+      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.commit={{ .Commit }}
+      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: helmdoc
+    ids:
+      - helmdoc
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  draft: false
+  prerelease: auto
+
+brews:
+  - ids:
+      - helmdoc
+    directory: Formula
+    repository:
+      owner: belyaev-dev
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/belyaev-dev/helmdoc
+    description: Production-readiness linter for Helm charts
+    license: MIT
+    install: |
+      bin.install "helmdoc"
+    test: |
+      system "#{bin}/helmdoc", "version"
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
