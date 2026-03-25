@@ -1,50 +1,45 @@
-name: release
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  packages: write
 
 jobs:
-  goreleaser:
+  publish-release:
+    name: publish-release
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out source
-        uses: actions/checkout@v6
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Run tests
-        run: go test ./...
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Verify Homebrew tap token is configured
-        env:
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
-        run: |
-          if [ -z "$HOMEBREW_TAP_GITHUB_TOKEN" ]; then
-            echo "::error::Missing HOMEBREW_TAP_GITHUB_TOKEN secret in belyaev-dev/helmdoc."
-            exit 1
-          fi
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
+      - name: Login to GHCR
+        uses: docker/login-action@v4
         with:
-          version: '~> v2'
-          args: release --clean
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GoReleaser release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: go run github.com/goreleaser/goreleaser/v2@v2.14.3 release --clean --verbose

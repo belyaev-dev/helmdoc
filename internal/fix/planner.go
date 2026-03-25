@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/belyaev-dev/helmdoc/internal/registry"
 	"github.com/belyaev-dev/helmdoc/internal/rules"
 	"github.com/belyaev-dev/helmdoc/pkg/models"
 )
@@ -25,6 +26,8 @@ func PlanValuesBundle(ctx rules.AnalysisContext, findings []models.Finding) Bund
 		PendingFindings:    make([]PendingFinding, 0),
 	}
 
+	defaultRegistry, registryErr := registry.Default()
+
 	for _, finding := range findings {
 		if explanation, ok := advisoryExplanationForFinding(finding); ok {
 			plan.AdvisoryFindings = append(plan.AdvisoryFindings, AdvisoryFinding{
@@ -34,7 +37,7 @@ func PlanValuesBundle(ctx rules.AnalysisContext, findings []models.Finding) Bund
 			continue
 		}
 
-		fix, pending, ok := planFinding(ctx.ValuesSurface, findings, finding)
+		fix, pending, ok := planFinding(ctx, defaultRegistry, registryErr, findings, finding)
 		if ok {
 			plan.AppliedValuesFixes = append(plan.AppliedValuesFixes, fix)
 			continue
@@ -212,13 +215,13 @@ func advisoryExplanationForFinding(finding models.Finding) (string, bool) {
 	}
 }
 
-func planFinding(surface *models.ValuesSurface, findings []models.Finding, finding models.Finding) (AppliedValuesFix, PendingFinding, bool) {
-	valuesPath, summary, reason, ok := selectValuesPath(surface, findings, finding)
+func planFinding(ctx rules.AnalysisContext, defaultRegistry *registry.Registry, registryErr error, findings []models.Finding, finding models.Finding) (AppliedValuesFix, PendingFinding, bool) {
+	valuesPath, summary, reason, ok := selectValuesPath(ctx, defaultRegistry, registryErr, findings, finding)
 	if !ok {
 		return AppliedValuesFix{}, PendingFinding{Finding: finding, Reason: reason}, false
 	}
 
-	value, err := defaultPayloadForFinding(finding, valuesPath, surface)
+	value, err := defaultPayloadForFinding(finding, valuesPath, ctx.ValuesSurface)
 	if err != nil {
 		return AppliedValuesFix{}, PendingFinding{Finding: finding, Reason: err.Error()}, false
 	}
@@ -231,14 +234,20 @@ func planFinding(surface *models.ValuesSurface, findings []models.Finding, findi
 	}, PendingFinding{}, true
 }
 
-func selectValuesPath(surface *models.ValuesSurface, findings []models.Finding, finding models.Finding) (string, string, string, bool) {
-	for _, candidate := range knownValuesCandidates(findings, finding) {
-		if surfaceExposesPath(surface, candidate.path) {
+func selectValuesPath(ctx rules.AnalysisContext, defaultRegistry *registry.Registry, registryErr error, findings []models.Finding, finding models.Finding) (string, string, string, bool) {
+	for _, candidate := range registryValuesCandidates(ctx, defaultRegistry, registryErr, findings, finding) {
+		if surfaceExposesPath(ctx.ValuesSurface, candidate.path) {
 			return candidate.path, candidate.summary, "", true
 		}
 	}
 
-	if candidate, ok := suffixFallbackCandidate(surface, finding); ok {
+	for _, candidate := range knownValuesCandidates(findings, finding) {
+		if surfaceExposesPath(ctx.ValuesSurface, candidate.path) {
+			return candidate.path, candidate.summary, "", true
+		}
+	}
+
+	if candidate, ok := suffixFallbackCandidate(ctx.ValuesSurface, finding); ok {
 		return candidate.path, candidate.summary, "", true
 	}
 
@@ -354,6 +363,71 @@ func knownValuesCandidates(findings []models.Finding, finding models.Finding) []
 	}
 
 	return nil
+}
+
+func registryValuesCandidates(ctx rules.AnalysisContext, defaultRegistry *registry.Registry, registryErr error, findings []models.Finding, finding models.Finding) []valuesCandidate {
+	if defaultRegistry == nil || registryErr != nil {
+		return nil
+	}
+
+	chartName := analysisChartName(ctx)
+	if chartName == "" {
+		return nil
+	}
+
+	candidates := defaultRegistry.LookupCandidatesForFinding(chartName, findings, finding)
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	resolved := make([]valuesCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if resolvedCandidate, ok := valuesCandidateFromRegistryCandidate(finding, candidate); ok {
+			resolved = append(resolved, resolvedCandidate)
+		}
+	}
+	if len(resolved) == 0 {
+		return nil
+	}
+
+	return resolved
+}
+
+func valuesCandidateFromRegistryCandidate(finding models.Finding, candidate registry.Candidate) (valuesCandidate, bool) {
+	if candidate.ValuesPath != "" {
+		return valuesCandidate{
+			path:    candidate.ValuesPath,
+			base:    candidate.ValuesBase,
+			summary: candidate.Summary,
+		}, true
+	}
+
+	if candidate.ValuesBase == "" {
+		return valuesCandidate{}, false
+	}
+
+	resolvedPath := candidate.ValuesBase
+	switch finding.RuleID {
+	case "RES001":
+		resolvedPath += ".limits"
+	case "RES002":
+		resolvedPath += ".requests"
+	default:
+		return valuesCandidate{}, false
+	}
+
+	return valuesCandidate{
+		path:    resolvedPath,
+		base:    candidate.ValuesBase,
+		summary: candidate.Summary,
+	}, true
+}
+
+func analysisChartName(ctx rules.AnalysisContext) string {
+	if ctx.Chart == nil || ctx.Chart.Metadata == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.Chart.Metadata.Name)
 }
 
 func suffixFallbackCandidate(surface *models.ValuesSurface, finding models.Finding) (valuesCandidate, bool) {

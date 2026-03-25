@@ -102,8 +102,8 @@ func TestRealChartValidationGrafana(t *testing.T) {
 	ctx := realcharts.AnalysisContext(t, fixture)
 	plan := PlanBundle(ctx, rules.RunAll(ctx))
 
-	if got := len(plan.AppliedValuesFixes); got != 1 {
-		t.Fatalf("fixture %s values fixes = %d, want 1", fixture.ID, got)
+	if got := len(plan.AppliedValuesFixes); got != 5 {
+		t.Fatalf("fixture %s values fixes = %d, want 5", fixture.ID, got)
 	}
 	if got := len(plan.KustomizePatches); got != 0 {
 		t.Fatalf("fixture %s kustomize patches = %d, want 0", fixture.ID, got)
@@ -111,16 +111,20 @@ func TestRealChartValidationGrafana(t *testing.T) {
 	if got := len(plan.AdvisoryFindings); got != 1 {
 		t.Fatalf("fixture %s advisory findings = %d, want 1", fixture.ID, got)
 	}
-	if got := len(plan.PendingFindings); got != 5 {
-		t.Fatalf("fixture %s pending findings = %d, want 5", fixture.ID, got)
+	if got := len(plan.PendingFindings); got != 1 {
+		t.Fatalf("fixture %s pending findings = %d, want 1", fixture.ID, got)
 	}
 
 	advisory := requireAdvisoryFinding(t, plan, "IMG002")
 	if want, _ := advisoryExplanationForFinding(advisory.Finding); advisory.Explanation != want {
 		t.Fatalf("fixture %s advisory explanation = %q, want %q", fixture.ID, advisory.Explanation, want)
 	}
-	requirePendingFindingRuleIDs(t, fixture.ID, plan.PendingFindings, []string{"AVL001", "RES001", "RES002", "SCL001", "SEC003"})
-	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "NET001", "templates/deployment.yaml", "imageRenderer.networkPolicy.enabled")
+	requirePendingFindingRuleIDs(t, fixture.ID, plan.PendingFindings, []string{"SEC003"})
+	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "RES001", "templates/deployment.yaml", "resources.limits")
+	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "RES002", "templates/deployment.yaml", "resources.requests")
+	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "NET001", "templates/deployment.yaml", "networkPolicy.enabled")
+	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "SCL001", "templates/deployment.yaml", "autoscaling")
+	requireAppliedValuesPathForChart(t, fixture.ID, plan.AppliedValuesFixes, "AVL001", "templates/deployment.yaml", "podDisruptionBudget.maxUnavailable")
 
 	overrides, err := MergeValuesOverrides(plan.AppliedValuesFixes)
 	if err != nil {
@@ -132,10 +136,32 @@ func TestRealChartValidationGrafana(t *testing.T) {
 	if got, ok := deployment.GetNestedMap("spec", "selector", "matchLabels"); !ok || len(got) == 0 {
 		t.Fatalf("fixture %s rendered Deployment/%s is missing spec.selector.matchLabels", fixture.ID, deployment.Name)
 	}
-	requireRenderedWorkloadContainerForChart(t, fixture.ID, rerendered, "templates/deployment.yaml", "Deployment", "helmdoc-grafana", "grafana")
-	requireNoRenderedResourcesForChart(t, fixture.ID, rerendered, "templates/networkpolicy.yaml")
-	requireNoRenderedResourcesForChart(t, fixture.ID, rerendered, "templates/poddisruptionbudget.yaml")
-	requireNoRenderedResourcesForChart(t, fixture.ID, rerendered, "templates/hpa.yaml")
+	grafanaContainer := requireRenderedWorkloadContainerForChart(t, fixture.ID, rerendered, "templates/deployment.yaml", "Deployment", "helmdoc-grafana", "grafana")
+	requireContainerStringField(t, fixture.ID, grafanaContainer.Container, []string{"resources", "limits", "cpu"}, "100m", "Deployment/helmdoc-grafana container \"grafana\"")
+	requireContainerStringField(t, fixture.ID, grafanaContainer.Container, []string{"resources", "limits", "memory"}, "90Mi", "Deployment/helmdoc-grafana container \"grafana\"")
+	requireContainerStringField(t, fixture.ID, grafanaContainer.Container, []string{"resources", "requests", "cpu"}, "100m", "Deployment/helmdoc-grafana container \"grafana\"")
+	requireContainerStringField(t, fixture.ID, grafanaContainer.Container, []string{"resources", "requests", "memory"}, "90Mi", "Deployment/helmdoc-grafana container \"grafana\"")
+
+	requireRenderedResourceForChart(t, fixture.ID, rerendered, "templates/networkpolicy.yaml", "NetworkPolicy", "helmdoc-grafana")
+	pdb := requireRenderedResourceForChart(t, fixture.ID, rerendered, "templates/poddisruptionbudget.yaml", "PodDisruptionBudget", "helmdoc-grafana")
+	hpa := requireRenderedResourceForChart(t, fixture.ID, rerendered, "templates/hpa.yaml", "HorizontalPodAutoscaler", "helmdoc-grafana")
+	if got, ok := pdb.GetNestedMap("spec", "selector", "matchLabels"); !ok || len(got) == 0 {
+		t.Fatalf("fixture %s rendered PodDisruptionBudget/%s is missing spec.selector.matchLabels", fixture.ID, pdb.Name)
+	}
+	if got, ok := hpa.GetNestedMap("spec", "scaleTargetRef"); !ok {
+		t.Fatalf("fixture %s rendered HorizontalPodAutoscaler/%s is missing spec.scaleTargetRef", fixture.ID, hpa.Name)
+	} else {
+		if gotKind, _ := got["kind"].(string); gotKind != "Deployment" {
+			t.Fatalf("fixture %s rendered HorizontalPodAutoscaler/%s scaleTargetRef.kind = %#v, want %q", fixture.ID, hpa.Name, got["kind"], "Deployment")
+		}
+		if gotName, _ := got["name"].(string); gotName != "helmdoc-grafana" {
+			t.Fatalf("fixture %s rendered HorizontalPodAutoscaler/%s scaleTargetRef.name = %#v, want %q", fixture.ID, hpa.Name, got["name"], "helmdoc-grafana")
+		}
+	}
+	if got, ok := hpa.GetNested("spec", "minReplicas"); !ok || fmt.Sprint(got) != "2" {
+		t.Fatalf("fixture %s rendered HorizontalPodAutoscaler/%s spec.minReplicas = %#v, want 2", fixture.ID, hpa.Name, got)
+	}
+
 	requireNoRenderedResourcesForChart(t, fixture.ID, rerendered, "templates/image-renderer-network-policy.yaml")
 	requireNoRenderedResourcesForChart(t, fixture.ID, rerendered, "templates/image-renderer-hpa.yaml")
 }

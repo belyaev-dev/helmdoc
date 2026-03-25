@@ -239,12 +239,12 @@ func TestPlanBundleRoutesAdvisoryFindings(t *testing.T) {
 		{
 			name:             "grafana",
 			fixtureID:        "grafana",
-			wantValues:       1,
+			wantValues:       5,
 			wantPatches:      0,
 			wantAdvisories:   1,
-			wantPending:      5,
+			wantPending:      1,
 			wantAppliedKey:   "NET001|templates/deployment.yaml",
-			wantAppliedValue: "imageRenderer.networkPolicy.enabled",
+			wantAppliedValue: "networkPolicy.enabled",
 		},
 		{
 			name:           "postgresql",

@@ -1,0 +1,80 @@
+name: Published release smoke
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released helmdoc tag to verify; use latest to resolve the newest published release.
+        required: false
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  published-release-direct:
+    name: published-release-direct (${{ matrix.install-kind }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        install-kind:
+          - binary
+          - docker
+          - go-install
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: matrix.install-kind != 'docker'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run published release smoke
+        env:
+          HELMDOC_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version || 'latest' }}
+        run: |
+          set -euo pipefail
+          bash scripts/verify-published-release.sh \
+            --version "${HELMDOC_RELEASE_VERSION}" \
+            --install-kind "${{ matrix.install-kind }}" \
+            --chart-path ./testdata/nginx-ingress
+
+  published-release-homebrew:
+    name: published-release-homebrew
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run published release smoke
+        env:
+          HELMDOC_RELEASE_VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version || 'latest' }}
+        run: |
+          set -euo pipefail
+          bash scripts/verify-published-release.sh \
+            --version "${HELMDOC_RELEASE_VERSION}" \
+            --install-kind brew \
+            --chart-path ./testdata/nginx-ingress
+
+  published-release-action:
+    name: published-release-action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run local composite action smoke
+        uses: ./
+        with:
+          chart-path: ./testdata/nginx-ingress
+          version: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version || 'latest' }}
+          output: text
+          min-score: B

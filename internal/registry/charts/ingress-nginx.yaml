@@ -1,0 +1,126 @@
+chart: ingress-nginx
+mappings:
+  - rule: SEC003
+    template: templates/controller-deployment.yaml
+    candidates:
+      - values_path: controller.image.readOnlyRootFilesystem
+        summary: Enable the controller image read-only root filesystem knob.
+  - rule: SEC003
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - values_path: controller.image.readOnlyRootFilesystem
+        summary: Enable the controller image read-only root filesystem knob.
+  - rule: SEC003
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - values_path: defaultBackend.image.readOnlyRootFilesystem
+        summary: Enable the default-backend image read-only root filesystem knob.
+
+  - rule: RES001
+    template: templates/controller-deployment.yaml
+    candidates:
+      - values_base: controller.resources
+        summary: Populate resource limits through the chart values surface.
+  - rule: RES001
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - values_base: controller.resources
+        summary: Populate resource limits through the chart values surface.
+  - rule: RES001
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - values_base: defaultBackend.resources
+        summary: Populate resource limits through the chart values surface.
+  - rule: RES001
+    template: templates/admission-webhooks/job-patch/job-createSecret.yaml
+    candidates:
+      - values_base: controller.admissionWebhooks.createSecretJob.resources
+        summary: Populate resource limits through the chart values surface.
+  - rule: RES001
+    template: templates/admission-webhooks/job-patch/job-patchWebhook.yaml
+    candidates:
+      - values_base: controller.admissionWebhooks.patchWebhookJob.resources
+        summary: Populate resource limits through the chart values surface.
+
+  - rule: RES002
+    template: templates/controller-deployment.yaml
+    candidates:
+      - values_base: controller.resources
+        summary: Populate resource requests through the chart values surface.
+  - rule: RES002
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - values_base: controller.resources
+        summary: Populate resource requests through the chart values surface.
+  - rule: RES002
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - values_base: defaultBackend.resources
+        summary: Populate resource requests through the chart values surface.
+  - rule: RES002
+    template: templates/admission-webhooks/job-patch/job-createSecret.yaml
+    candidates:
+      - values_base: controller.admissionWebhooks.createSecretJob.resources
+        summary: Populate resource requests through the chart values surface.
+  - rule: RES002
+    template: templates/admission-webhooks/job-patch/job-patchWebhook.yaml
+    candidates:
+      - values_base: controller.admissionWebhooks.patchWebhookJob.resources
+        summary: Populate resource requests through the chart values surface.
+
+  - rule: NET001
+    template: templates/controller-deployment.yaml
+    candidates:
+      - values_path: controller.networkPolicy.enabled
+        summary: Enable the controller networkPolicy switch.
+  - rule: NET001
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - values_path: controller.networkPolicy.enabled
+        summary: Enable the controller networkPolicy switch.
+  - rule: NET001
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - values_path: defaultBackend.networkPolicy.enabled
+        summary: Enable the default-backend networkPolicy switch.
+
+  - rule: SCL001
+    template: templates/controller-deployment.yaml
+    candidates:
+      - values_path: controller.autoscaling
+        summary: Enable controller autoscaling with a conservative baseline.
+  - rule: SCL001
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - values_path: controller.autoscaling
+        summary: Enable controller autoscaling with a conservative baseline.
+  - rule: SCL001
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - values_path: defaultBackend.autoscaling
+        summary: Enable default-backend autoscaling with a conservative baseline.
+
+  - rule: AVL001
+    template: templates/controller-deployment.yaml
+    candidates:
+      - requires_related_rule: SCL001
+        values_path: controller.autoscaling.minReplicas
+        summary: Raise controller autoscaling.minReplicas so the chart can render a controller PodDisruptionBudget.
+      - values_path: controller.replicaCount
+        summary: Raise controller replicaCount so the chart can render a controller PodDisruptionBudget.
+  - rule: AVL001
+    template: templates/controller-daemonset.yaml
+    candidates:
+      - requires_related_rule: SCL001
+        values_path: controller.autoscaling.minReplicas
+        summary: Raise controller autoscaling.minReplicas so the chart can render a controller PodDisruptionBudget.
+      - values_path: controller.replicaCount
+        summary: Raise controller replicaCount so the chart can render a controller PodDisruptionBudget.
+  - rule: AVL001
+    template: templates/default-backend-deployment.yaml
+    candidates:
+      - requires_related_rule: SCL001
+        values_path: defaultBackend.autoscaling.minReplicas
+        summary: Raise default-backend autoscaling.minReplicas so the chart can render a PodDisruptionBudget.
+      - values_path: defaultBackend.replicaCount
+        summary: Raise default-backend replicaCount so the chart can render a PodDisruptionBudget.

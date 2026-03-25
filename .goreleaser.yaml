@@ -2,6 +2,17 @@ version: 2
 
 project_name: helmdoc
 
+release:
+  github:
+    owner: belyaev-dev
+    name: helmdoc
+
+snapshot:
+  version_template: "0.0.0-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  disable: true
+
 builds:
   - id: helmdoc
     main: .
@@ -9,71 +20,85 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - darwin
       - linux
+      - darwin
       - windows
     goarch:
       - amd64
       - arm64
-    flags:
-      - -trimpath
     ldflags:
-      - -s -w
-      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.version={{ .Version }}
-      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.commit={{ .Commit }}
-      - -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.date={{ .CommitDate }}
-    mod_timestamp: "{{ .CommitTimestamp }}"
+      - >-
+        -s -w
+        -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.version={{ .Tag }}
+        -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.commit={{ .Commit }}
+        -X github.com/belyaev-dev/helmdoc/cmd/helmdoc.date={{ .Date }}
 
 archives:
-  - id: helmdoc
+  - id: binaries
     ids:
       - helmdoc
+    formats:
+      - zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
     files:
       - LICENSE
 
 checksum:
   name_template: checksums.txt
-  algorithm: sha256
-
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
-
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
-      - "^chore:"
-      - "Merge pull request"
-      - "Merge branch"
-
-release:
-  draft: false
-  prerelease: auto
 
 brews:
   - ids:
-      - helmdoc
-    directory: Formula
+      - binaries
     repository:
       owner: belyaev-dev
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/belyaev-dev/helmdoc
-    description: Production-readiness linter for Helm charts
+      token: "{{ .Env.GH_PAT }}"
+    directory: Formula
+    homepage: "https://github.com/belyaev-dev/helmdoc"
+    description: "Analyze and fix Helm charts"
     license: MIT
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
     install: |
       bin.install "helmdoc"
     test: |
       system "#{bin}/helmdoc", "version"
-    commit_author:
-      name: github-actions[bot]
-      email: 41898282+github-actions[bot]@users.noreply.github.com
-    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
+
+dockers:
+  - ids:
+      - helmdoc
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/belyaev-dev/helmdoc"
+  - ids:
+      - helmdoc
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+    image_templates:
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/belyaev-dev/helmdoc"
+
+docker_manifests:
+  - name_template: "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-amd64"
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/belyaev-dev/helmdoc:latest"
+    image_templates:
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-amd64"
+      - "ghcr.io/belyaev-dev/helmdoc:{{ .Version }}-arm64"

@@ -144,17 +144,29 @@ func siblingResourceRequirementPath(basePath, requirement string) string {
 }
 
 func defaultAvailabilityPayload(valuesPath string, surface *models.ValuesSurface) (any, error) {
-	switch valuesPath {
-	case "controller.autoscaling.minReplicas", "defaultBackend.autoscaling.minReplicas":
+	switch {
+	case valuesPath == "autoscaling.minReplicas", strings.HasSuffix(valuesPath, ".autoscaling.minReplicas"):
 		defaultValue, _ := intDefault(surface, valuesPath)
 		if defaultValue < 2 {
 			defaultValue = 2
 		}
 		return defaultValue, nil
-	case "controller.replicaCount", "defaultBackend.replicaCount":
+	case valuesPath == "replicaCount", valuesPath == "replicas", strings.HasSuffix(valuesPath, ".replicaCount"), strings.HasSuffix(valuesPath, ".replicas"):
 		defaultValue, _ := intDefault(surface, valuesPath)
 		if defaultValue < 2 {
 			defaultValue = 2
+		}
+		return defaultValue, nil
+	case valuesPath == "podDisruptionBudget.maxUnavailable", strings.HasSuffix(valuesPath, ".podDisruptionBudget.maxUnavailable"):
+		defaultValue, ok := intDefault(surface, valuesPath)
+		if !ok || defaultValue < 1 {
+			defaultValue = 1
+		}
+		return defaultValue, nil
+	case valuesPath == "podDisruptionBudget.minAvailable", strings.HasSuffix(valuesPath, ".podDisruptionBudget.minAvailable"):
+		defaultValue, ok := intDefault(surface, valuesPath)
+		if !ok || defaultValue < 1 {
+			defaultValue = 1
 		}
 		return defaultValue, nil
 	default:
@@ -179,22 +191,50 @@ func defaultAutoscalingPayload(valuesPath string, surface *models.ValuesSurface)
 	if !ok || maxReplicas <= minReplicas {
 		maxReplicas = minReplicas + 1
 	}
-	cpuUtil, ok := intDefault(surface, basePath+".targetCPUUtilizationPercentage")
-	if !ok || cpuUtil <= 0 {
-		cpuUtil = 50
-	}
-	memoryUtil, ok := intDefault(surface, basePath+".targetMemoryUtilizationPercentage")
-	if !ok || memoryUtil <= 0 {
-		memoryUtil = 50
+
+	payload := map[string]any{
+		"enabled":     true,
+		"minReplicas": minReplicas,
+		"maxReplicas": maxReplicas,
 	}
 
-	return map[string]any{
-		"enabled":                           true,
-		"minReplicas":                       minReplicas,
-		"maxReplicas":                       maxReplicas,
-		"targetCPUUtilizationPercentage":    cpuUtil,
-		"targetMemoryUtilizationPercentage": memoryUtil,
-	}, nil
+	if metricValue, ok := autoscalingMetricDefault(surface, basePath+".targetCPUUtilizationPercentage", 50); ok {
+		payload["targetCPUUtilizationPercentage"] = metricValue
+	} else if metricValue, ok := autoscalingMetricDefault(surface, basePath+".targetCPU", 50); ok {
+		payload["targetCPU"] = metricValue
+	}
+	if metricValue, ok := autoscalingMetricDefault(surface, basePath+".targetMemoryUtilizationPercentage", 50); ok {
+		payload["targetMemoryUtilizationPercentage"] = metricValue
+	} else if metricValue, ok := autoscalingMetricDefault(surface, basePath+".targetMemory", 50); ok {
+		payload["targetMemory"] = metricValue
+	}
+
+	return payload, nil
+}
+
+func autoscalingMetricDefault(surface *models.ValuesSurface, path string, fallback int) (any, bool) {
+	if surface == nil || path == "" || !surface.HasPath(path) {
+		return nil, false
+	}
+
+	value := surface.GetDefault(path)
+	switch typed := value.(type) {
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return fmt.Sprintf("%d", fallback), true
+		}
+		return typed, true
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		if numeric, ok := intDefault(surface, path); ok && numeric > 0 {
+			return numeric, true
+		}
+		return fallback, true
+	default:
+		if numeric, ok := intDefault(surface, path); ok && numeric > 0 {
+			return numeric, true
+		}
+		return fallback, true
+	}
 }
 
 func nonEmptyMapDefault(surface *models.ValuesSurface, path string) (map[string]any, bool) {

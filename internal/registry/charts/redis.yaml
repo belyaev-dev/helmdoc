@@ -1,0 +1,12 @@
+chart: redis
+mappings:
+  - rule: RES001
+    template: templates/master/application.yaml
+    candidates:
+      - values_base: master.resources
+        summary: Populate Redis primary resource limits through the chart's master.resources subtree.
+  - rule: RES002
+    template: templates/master/application.yaml
+    candidates:
+      - values_base: master.resources
+        summary: Populate Redis primary resource requests through the chart's master.resources subtree.

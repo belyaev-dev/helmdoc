@@ -1,0 +1,27 @@
+chart: grafana
+mappings:
+  - rule: RES001
+    template: templates/deployment.yaml
+    candidates:
+      - values_base: resources
+        summary: Populate Grafana container resource limits through the top-level resources subtree.
+  - rule: RES002
+    template: templates/deployment.yaml
+    candidates:
+      - values_base: resources
+        summary: Populate Grafana container resource requests through the top-level resources subtree.
+  - rule: NET001
+    template: templates/deployment.yaml
+    candidates:
+      - values_path: networkPolicy.enabled
+        summary: Enable the chart's primary NetworkPolicy switch for the Grafana workload.
+  - rule: SCL001
+    template: templates/deployment.yaml
+    candidates:
+      - values_path: autoscaling
+        summary: Enable the chart's primary autoscaling block for the Grafana deployment.
+  - rule: AVL001
+    template: templates/deployment.yaml
+    candidates:
+      - values_path: podDisruptionBudget.maxUnavailable
+        summary: Set a conservative PodDisruptionBudget value so the chart renders a Grafana PodDisruptionBudget.

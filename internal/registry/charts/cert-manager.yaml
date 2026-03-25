@@ -1,0 +1,12 @@
+chart: cert-manager
+mappings:
+  - rule: RES001
+    template: templates/deployment.yaml
+    candidates:
+      - values_base: resources
+        summary: Populate cert-manager controller resource limits through the top-level resources subtree.
+  - rule: RES002
+    template: templates/deployment.yaml
+    candidates:
+      - values_base: resources
+        summary: Populate cert-manager controller resource requests through the top-level resources subtree.
