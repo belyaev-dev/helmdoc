@@ -155,10 +155,22 @@ func TestPublishedReleaseSmokeContract(t *testing.T) {
 		"docker pull",
 		"go install",
 		"scripts/install-helmdoc-release.sh",
+		"require_file() {",
+		"assert_output_contains() {",
+		"print_output() {",
 		"image_version=$(derive_release_version \"$release_tag\")",
 		"image_ref=\"${DOCKER_IMAGE_REPOSITORY}:${image_version}\"",
 		"version 2>&1",
 		"scan \"$chart_path\" --min-score B",
+		"fix \"$chart_path\" --output-dir \"$fix_dir\"",
+		"assert_output_contains \"${install_kind} scan output\" \"$scan_output\" \"Overall:\" \"Score:\" \"Total findings:\"",
+		"require_file \"$fix_dir/values-overrides.yaml\"",
+		"require_file \"$fix_dir/README.md\"",
+		"docker run --rm -v \"${chart_parent}:/fixtures:ro\" \"$image_ref\" scan \"/fixtures/${chart_name}\" --min-score B 2>&1",
+		"assert_output_contains \"docker scan output\" \"$docker_scan_output\" \"Overall:\" \"Score:\" \"Total findings:\"",
+		"docker run --rm -v \"${chart_parent}:/fixtures:ro\" -v \"$docker_fix_dir:/output\" \"$image_ref\" fix \"/fixtures/${chart_name}\" --output-dir /output 2>&1",
+		"require_file \"$docker_fix_dir/values-overrides.yaml\"",
+		"require_file \"$docker_fix_dir/README.md\"",
 		"install kind ${install_kind}",
 		"resolved release tag ${release_tag}",
 		"derived docker image version ${image_version}",
@@ -168,6 +180,28 @@ func TestPublishedReleaseSmokeContract(t *testing.T) {
 			t.Fatalf("verify-published-release.sh missing %q", want)
 		}
 	}
+	assertSubstringOrder(t, scriptRaw,
+		`scan "$chart_path" --min-score B`,
+		`print_output "$install_kind" scan "$scan_output"`,
+		`assert_output_contains "${install_kind} scan output" "$scan_output" "Overall:" "Score:" "Total findings:"`,
+	)
+	assertSubstringOrder(t, scriptRaw,
+		`fix "$chart_path" --output-dir "$fix_dir"`,
+		`print_output "$install_kind" fix "$fix_output"`,
+		`require_file "$fix_dir/values-overrides.yaml"`,
+		`require_file "$fix_dir/README.md"`,
+	)
+	assertSubstringOrder(t, scriptRaw,
+		`docker run --rm -v "${chart_parent}:/fixtures:ro" "$image_ref" scan "/fixtures/${chart_name}" --min-score B 2>&1`,
+		`print_output docker scan "$docker_scan_output"`,
+		`assert_output_contains "docker scan output" "$docker_scan_output" "Overall:" "Score:" "Total findings:"`,
+	)
+	assertSubstringOrder(t, scriptRaw,
+		`docker run --rm -v "${chart_parent}:/fixtures:ro" -v "$docker_fix_dir:/output" "$image_ref" fix "/fixtures/${chart_name}" --output-dir /output 2>&1`,
+		`print_output docker fix "$docker_fix_output"`,
+		`require_file "$docker_fix_dir/values-overrides.yaml"`,
+		`require_file "$docker_fix_dir/README.md"`,
+	)
 	for _, forbidden := range []string{
 		"image_ref=\"${DOCKER_IMAGE_REPOSITORY}:${release_tag}\"",
 		"derived docker image version ${release_tag}",

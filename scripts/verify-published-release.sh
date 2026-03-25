@@ -24,6 +24,35 @@ fail() {
   exit 1
 }
 
+require_file() {
+  local path=$1
+  if [[ ! -f "$path" ]]; then
+    fail "expected artifact file missing: $path"
+  fi
+}
+
+assert_output_contains() {
+  local label=$1
+  local output=$2
+  shift 2
+
+  local marker
+  for marker in "$@"; do
+    if [[ "$output" != *"$marker"* ]]; then
+      fail "${label} missing report marker ${marker}"
+    fi
+  done
+}
+
+print_output() {
+  local install_kind=$1
+  local phase=$2
+  local output=${3:-}
+  if [[ -n "$output" ]]; then
+    printf '%s\n' "$output" | sed "s#^#verify-published-release: ${install_kind}: ${phase} #"
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/verify-published-release.sh [--version <tag-or-latest>] [--install-kind <all|binary|docker|go-install|brew>] [--chart-path <path>]
@@ -133,9 +162,7 @@ run_command() {
   if ! output=$("$@" 2>&1); then
     fail "install kind ${install_kind} tag ${release_tag} command failed (${description}): ${output}"
   fi
-  if [[ -n "$output" ]]; then
-    printf '%s\n' "$output" | sed "s#^#verify-published-release: ${install_kind}: #"
-  fi
+  print_output "$install_kind" command "$output"
 }
 
 assert_version_output() {
@@ -152,11 +179,12 @@ assert_version_output() {
   fi
 }
 
-run_version_and_scan() {
+run_version_scan_and_fix() {
   local install_kind=$1
   local release_tag=$2
   local chart_path=$3
-  shift 3
+  local fix_dir=$4
+  shift 4
 
   local version_output
   log "install kind ${install_kind}"
@@ -166,7 +194,7 @@ run_version_and_scan() {
   if ! version_output=$("$@" version 2>&1); then
     fail "install kind ${install_kind} tag ${release_tag} command failed ($* version): ${version_output}"
   fi
-  printf '%s\n' "$version_output" | sed "s#^#verify-published-release: ${install_kind}: version #"
+  print_output "$install_kind" version "$version_output"
   assert_version_output "$install_kind" "$release_tag" "$version_output"
 
   local scan_output
@@ -174,7 +202,20 @@ run_version_and_scan() {
   if ! scan_output=$("$@" scan "$chart_path" --min-score B 2>&1); then
     fail "install kind ${install_kind} tag ${release_tag} command failed ($* scan ${chart_path} --min-score B): ${scan_output}"
   fi
-  printf '%s\n' "$scan_output" | sed "s#^#verify-published-release: ${install_kind}: scan #"
+  print_output "$install_kind" scan "$scan_output"
+  assert_output_contains "${install_kind} scan output" "$scan_output" "Overall:" "Score:" "Total findings:"
+
+  rm -rf "$fix_dir"
+  mkdir -p "$fix_dir"
+
+  local fix_output
+  log "command $* fix ${chart_path} --output-dir ${fix_dir}"
+  if ! fix_output=$("$@" fix "$chart_path" --output-dir "$fix_dir" 2>&1); then
+    fail "install kind ${install_kind} tag ${release_tag} command failed ($* fix ${chart_path} --output-dir ${fix_dir}): ${fix_output}"
+  fi
+  print_output "$install_kind" fix "$fix_output"
+  require_file "$fix_dir/values-overrides.yaml"
+  require_file "$fix_dir/README.md"
 }
 
 smoke_binary() {
@@ -182,6 +223,7 @@ smoke_binary() {
   local chart_path=$2
   local github_path_file="$WORK_ROOT/binary-github-path"
   local github_env_file="$WORK_ROOT/binary-github-env"
+  local binary_fix_dir="$WORK_ROOT/binary-fix"
   : > "$github_path_file"
   : > "$github_env_file"
 
@@ -193,7 +235,7 @@ smoke_binary() {
   if ! install_output=$(GITHUB_PATH="$github_path_file" GITHUB_ENV="$github_env_file" bash "$INSTALLER_SCRIPT" --version "$release_tag" 2>&1); then
     fail "install kind binary tag ${release_tag} command failed (bash ${INSTALLER_SCRIPT} --version ${release_tag}): ${install_output}"
   fi
-  printf '%s\n' "$install_output" | sed 's#^#verify-published-release: binary: #' 
+  print_output binary install "$install_output"
 
   local bin_dir
   bin_dir=$(tail -n 1 "$github_path_file")
@@ -201,17 +243,18 @@ smoke_binary() {
     fail "install kind binary tag ${release_tag} did not write a PATH entry via GITHUB_PATH"
   fi
   export PATH="$bin_dir:$PATH"
-  run_version_and_scan binary "$release_tag" "$chart_path" helmdoc
+  run_version_scan_and_fix binary "$release_tag" "$chart_path" "$binary_fix_dir" helmdoc
 }
 
 smoke_docker() {
   local release_tag=$1
   local chart_path=$2
-  local chart_parent chart_name image_ref image_version
+  local chart_parent chart_name image_ref image_version docker_fix_dir
   chart_parent=$(dirname "$chart_path")
   chart_name=$(basename "$chart_path")
   image_version=$(derive_release_version "$release_tag")
   image_ref="${DOCKER_IMAGE_REPOSITORY}:${image_version}"
+  docker_fix_dir="$WORK_ROOT/docker-fix"
 
   require_command docker
   log "install kind docker"
@@ -225,15 +268,28 @@ smoke_docker() {
   if ! version_output=$(docker run --rm "$image_ref" version 2>&1); then
     fail "install kind docker tag ${release_tag} command failed (docker run --rm ${image_ref} version): ${version_output}"
   fi
-  printf '%s\n' "$version_output" | sed 's#^#verify-published-release: docker: version #' 
+  print_output docker version "$version_output"
   assert_version_output docker "$release_tag" "$version_output"
 
-  local scan_output
+  local docker_scan_output
   log "command docker run --rm -v ${chart_parent}:/fixtures:ro ${image_ref} scan /fixtures/${chart_name} --min-score B"
-  if ! scan_output=$(docker run --rm -v "${chart_parent}:/fixtures:ro" "$image_ref" scan "/fixtures/${chart_name}" --min-score B 2>&1); then
-    fail "install kind docker tag ${release_tag} command failed (docker run --rm -v ${chart_parent}:/fixtures:ro ${image_ref} scan /fixtures/${chart_name} --min-score B): ${scan_output}"
+  if ! docker_scan_output=$(docker run --rm -v "${chart_parent}:/fixtures:ro" "$image_ref" scan "/fixtures/${chart_name}" --min-score B 2>&1); then
+    fail "install kind docker tag ${release_tag} command failed (docker run --rm -v ${chart_parent}:/fixtures:ro ${image_ref} scan /fixtures/${chart_name} --min-score B): ${docker_scan_output}"
   fi
-  printf '%s\n' "$scan_output" | sed 's#^#verify-published-release: docker: scan #' 
+  print_output docker scan "$docker_scan_output"
+  assert_output_contains "docker scan output" "$docker_scan_output" "Overall:" "Score:" "Total findings:"
+
+  rm -rf "$docker_fix_dir"
+  mkdir -p "$docker_fix_dir"
+
+  local docker_fix_output
+  log "command docker run --rm -v ${chart_parent}:/fixtures:ro -v ${docker_fix_dir}:/output ${image_ref} fix /fixtures/${chart_name} --output-dir /output"
+  if ! docker_fix_output=$(docker run --rm -v "${chart_parent}:/fixtures:ro" -v "$docker_fix_dir:/output" "$image_ref" fix "/fixtures/${chart_name}" --output-dir /output 2>&1); then
+    fail "install kind docker tag ${release_tag} command failed (docker run --rm -v ${chart_parent}:/fixtures:ro -v ${docker_fix_dir}:/output ${image_ref} fix /fixtures/${chart_name} --output-dir /output): ${docker_fix_output}"
+  fi
+  print_output docker fix "$docker_fix_output"
+  require_file "$docker_fix_dir/values-overrides.yaml"
+  require_file "$docker_fix_dir/README.md"
 }
 
 smoke_go_install() {
@@ -243,6 +299,7 @@ smoke_go_install() {
   local gocache="$GO_WORK_ROOT/cache"
   local gotmp="$GO_WORK_ROOT/tmp"
   local gopath="$GO_WORK_ROOT/path"
+  local go_install_fix_dir="$WORK_ROOT/go-install-fix"
   mkdir -p "$gobin" "$gocache" "$gotmp" "$gopath"
 
   require_command go
@@ -250,12 +307,13 @@ smoke_go_install() {
   log "resolved release tag ${release_tag}"
   log "download target ${MODULE_PATH}@${release_tag}"
   run_command go-install "$release_tag" "go install ${MODULE_PATH}@${release_tag}" env GOBIN="$gobin" GOCACHE="$gocache" GOTMPDIR="$gotmp" GOPATH="$gopath" go install "${MODULE_PATH}@${release_tag}"
-  run_version_and_scan go-install "$release_tag" "$chart_path" "$gobin/helmdoc"
+  run_version_scan_and_fix go-install "$release_tag" "$chart_path" "$go_install_fix_dir" "$gobin/helmdoc"
 }
 
 smoke_brew() {
   local release_tag=$1
   local chart_path=$2
+  local brew_fix_dir="$WORK_ROOT/brew-fix"
 
   require_command brew
   log "install kind brew"
@@ -267,7 +325,7 @@ smoke_brew() {
   else
     run_command brew "$release_tag" "brew install ${BREW_FORMULA}" brew install "$BREW_FORMULA"
   fi
-  run_version_and_scan brew "$release_tag" "$chart_path" helmdoc
+  run_version_scan_and_fix brew "$release_tag" "$chart_path" "$brew_fix_dir" helmdoc
 }
 
 requested_version=$DEFAULT_VERSION
