@@ -3,6 +3,7 @@ package release
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -175,6 +176,8 @@ func TestReleaseWorkflowContract(t *testing.T) {
 	if strings.Contains(fmt.Sprint(ghcrLogin.With["password"]), "GH_PAT") {
 		t.Fatalf("Login to GHCR should use GITHUB_TOKEN, not GH_PAT: %#v", ghcrLogin.With)
 	}
+
+	assertTrackedCLIReleaseSources(t)
 }
 
 func loadWorkflowConfig(t *testing.T, path string) (workflowConfig, string) {
@@ -263,4 +266,37 @@ func assertNeeds(t *testing.T, needs interface{}, want string) {
 	default:
 		t.Fatalf("job.needs has unexpected type %T (%#v), want %q", needs, needs, want)
 	}
+}
+
+func assertTrackedCLIReleaseSources(t *testing.T) {
+	t.Helper()
+
+	repoRoot := filepath.Join("..", "..")
+	cmd := exec.Command("git", "ls-files", "--", "cmd/helmdoc")
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git ls-files -- cmd/helmdoc: %v\n%s", err, strings.TrimSpace(string(output)))
+	}
+
+	tracked := strings.Fields(strings.TrimSpace(string(output)))
+	for _, want := range []string{
+		"cmd/helmdoc/root.go",
+		"cmd/helmdoc/scan.go",
+		"cmd/helmdoc/analysis.go",
+		"cmd/helmdoc/fix.go",
+	} {
+		if !containsString(tracked, want) {
+			t.Fatalf("release workflow builds a clean checkout, so %q must be tracked; git ls-files returned %#v", want, tracked)
+		}
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
