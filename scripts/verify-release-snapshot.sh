@@ -28,6 +28,19 @@ require_file() {
   fi
 }
 
+assert_output_contains() {
+  local label=$1
+  local output=$2
+  shift 2
+
+  local marker
+  for marker in "$@"; do
+    if [[ "$output" != *"$marker"* ]]; then
+      fail "${label} missing report marker ${marker}"
+    fi
+  done
+}
+
 run_goreleaser() {
   (
     cd "$REPO_ROOT"
@@ -78,6 +91,17 @@ if ! native_scan_output=$("$native_binary" scan "$REPO_ROOT/testdata/nginx-ingre
   fail "native binary scan smoke failed: ${native_scan_output}"
 fi
 printf '%s\n' "$native_scan_output" | sed 's#^#verify-release-snapshot: native-scan #'
+assert_output_contains "native scan output" "$native_scan_output" "Overall:" "Score:" "Total findings:"
+
+native_fix_dir="$TMP_ROOT/native-fix"
+rm -rf "$native_fix_dir"
+log "smoke-running native binary fix on testdata/nginx-ingress"
+if ! native_fix_output=$("$native_binary" fix "$REPO_ROOT/testdata/nginx-ingress" --output-dir "$native_fix_dir" 2>&1); then
+  fail "native binary fix smoke failed: ${native_fix_output}"
+fi
+printf '%s\n' "$native_fix_output" | sed 's#^#verify-release-snapshot: native-fix #'
+require_file "$native_fix_dir/values-overrides.yaml"
+require_file "$native_fix_dir/README.md"
 
 log "verifying Docker image ${native_image_tag}"
 if ! docker image inspect "$native_image_tag" >/dev/null 2>&1; then
@@ -95,5 +119,17 @@ if ! docker_scan_output=$(docker run --rm -v "$REPO_ROOT/testdata:/fixtures:ro" 
   fail "docker scan smoke failed for ${native_image_tag}: ${docker_scan_output}"
 fi
 printf '%s\n' "$docker_scan_output" | sed 's#^#verify-release-snapshot: docker-scan #'
+assert_output_contains "docker scan output" "$docker_scan_output" "Overall:" "Score:" "Total findings:"
+
+docker_fix_dir="$TMP_ROOT/docker-fix"
+rm -rf "$docker_fix_dir"
+mkdir -p "$docker_fix_dir"
+log "smoke-running Docker image fix on mounted nginx-ingress fixture"
+if ! docker_fix_output=$(docker run --rm -v "$REPO_ROOT/testdata:/fixtures:ro" -v "$docker_fix_dir:/output" "$native_image_tag" fix /fixtures/nginx-ingress --output-dir /output 2>&1); then
+  fail "docker fix smoke failed for ${native_image_tag}: ${docker_fix_output}"
+fi
+printf '%s\n' "$docker_fix_output" | sed 's#^#verify-release-snapshot: docker-fix #'
+require_file "$docker_fix_dir/values-overrides.yaml"
+require_file "$docker_fix_dir/README.md"
 
 log "snapshot release verification passed"
