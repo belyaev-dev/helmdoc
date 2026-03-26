@@ -13,7 +13,16 @@ MODULE_PATH=$(awk '/^module / { print $2; exit }' "$REPO_ROOT/go.mod")
 TMP_ROOT=${TMPDIR:-/tmp}
 WORK_ROOT=$(mktemp -d "$TMP_ROOT/helmdoc-published-release.XXXXXX")
 GO_WORK_ROOT="$WORK_ROOT/go-install"
-trap 'rm -rf "$WORK_ROOT"' EXIT
+
+cleanup() {
+  local exit_code=$?
+  chmod -R u+w "$WORK_ROOT" 2>/dev/null || true
+  if ! rm -rf "$WORK_ROOT"; then
+    printf 'verify-published-release: warning: failed to clean work root %s\n' "$WORK_ROOT" >&2
+  fi
+  exit "$exit_code"
+}
+trap cleanup EXIT
 
 log() {
   printf 'verify-published-release: %s\n' "$*"
